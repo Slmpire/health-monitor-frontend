@@ -1,6 +1,6 @@
 # ── Firebase credentials ──────────────────────────
 # config.js holds your real Firebase URL.
-# NEVER commit this file to a public repo.s
+# NEVER commit this file to a public repo.
 
 # ── OS / editor junk ──────────────────────────────
 .DS_Store
