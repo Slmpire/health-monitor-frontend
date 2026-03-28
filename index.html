@@ -179,12 +179,12 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
     </div>
   </header>
 
-  <!-- Shown only when config.js is missing or misconfigured -->
+  <!-- Shown only when Firebase URL secret was not injected -->
   <div id="configError">
-    <strong>⚠ Firebase config not found</strong>
-    Copy <code>config.example.js</code> → <code>config.js</code> (same folder as this file),
-    then fill in your real Firebase URL. <code>config.js</code> is listed in <code>.gitignore</code>
-    and will never be committed to your repo.
+    <strong>⚠ Firebase URL not configured</strong>
+    Add a repository secret named <code>FIREBASE_DATABASE_URL</code> in
+    GitHub → Settings → Secrets and variables → Actions,
+    then re-run the deployment workflow.
   </div>
 
   <div id="noSensorState">
@@ -221,34 +221,35 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
 <!--
-  config.js is loaded here.
-  • It is listed in .gitignore → safe to store real credentials locally.
-  • The repo ships only config.example.js as a safe template.
-  • If the file is missing the onerror handler shows a friendly warning.
+  FIREBASE_DATABASE_URL below is a placeholder.
+  The GitHub Actions workflow replaces it with the real URL
+  from the repository secret FIREBASE_DATABASE_URL at deploy time.
+  The actual URL is never stored in this file in the repo.
 -->
-<script src="config.js" onerror="handleConfigMissing()"></script>
+<script>
+const FIREBASE_CONFIG = {
+  databaseURL: "https://YOUR-PROJECT-default-rtdb.firebaseio.com"
+};
+</script>
 
 <script>
-const MAX_HISTORY = 20;
+const MAX_HISTORY   = 20;
+const STALE_MS      = 30000;   // treat reading as stale after 30 seconds
 let activeSensorType = null;
-const historyLog = [];
+let lastReadingTime  = null;   // timestamp of last live reading
+let staleTimer       = null;   // interval that watches for stale data
+const historyLog     = [];
 
 /* ── CONFIG GUARDS ───────────────────────────────── */
-function handleConfigMissing() {
-  showConfigError();
-}
-
 function showConfigError() {
   document.getElementById('configError').style.display = 'block';
   document.getElementById('noSensorState').style.display = 'none';
-  setPill('error', 'Config Error');
+  setPill('error', 'No URL');
 }
 
 /* ── BOOT ────────────────────────────────────────── */
 window.addEventListener('DOMContentLoaded', () => {
-  // FIREBASE_CONFIG is defined by config.js (gitignored file)
-  if (typeof FIREBASE_CONFIG === 'undefined' ||
-      !FIREBASE_CONFIG.databaseURL ||
+  if (!FIREBASE_CONFIG.databaseURL ||
       FIREBASE_CONFIG.databaseURL.includes('YOUR-PROJECT')) {
     showConfigError();
     return;
@@ -282,11 +283,68 @@ function onLiveReading(data) {
   const st = data.sensor_type;
   if (!st) return;
   if (st !== activeSensorType) { buildSensorUI(st); activeSensorType = st; }
+  lastReadingTime = Date.now();
   updateLivePill(data);
   updateMeta(data);
   if      (st === 'MAX6675')  renderTemp(data);
   else if (st === 'MAX30102') renderPulse(data);
   else                        renderGeneric(data);
+  resetStaleTimer();
+}
+
+/* ── STALE DETECTION ─────────────────────────────── */
+function resetStaleTimer() {
+  if (staleTimer) clearInterval(staleTimer);
+  staleTimer = setInterval(() => {
+    if (lastReadingTime && Date.now() - lastReadingTime > STALE_MS) {
+      markStale();
+    }
+  }, 5000);  // check every 5 seconds
+}
+
+function markStale() {
+  setPill('offline', 'No signal');
+
+  // Clear temperature display
+  const vp = document.getElementById('valPrimary');
+  const vs = document.getElementById('valSecondary');
+  if (vp) vp.innerHTML = '—<span class="unit">°C</span>';
+  if (vs) vs.innerHTML = '— °F';
+  const cm = document.getElementById('cardMain');
+  if (cm) cm.className = 'card';  // remove connected / alert classes
+
+  // Clear pulse display
+  const vb  = document.getElementById('valBPM');
+  const vs2 = document.getElementById('valSpO2');
+  if (vb)  vb.innerHTML  = '—<span class="unit">BPM</span>';
+  if (vs2) vs2.innerHTML = '—<span class="unit">%</span>';
+  const fb  = document.getElementById('valFingerBPM');
+  const fs  = document.getElementById('valFingerSpO2');
+  const msg = '<span style="color:var(--muted)">No signal</span>';
+  if (fb) fb.innerHTML = msg;
+  if (fs) fs.innerHTML = msg;
+  ['confBar','confBar2'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) { b.style.width = '0%'; b.className = 'signal-fill poor'; }
+  });
+  ['confPct','confPct2'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.textContent = '—';
+  });
+  ['confLabelBPM','confLabelSpO2'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.textContent = 'No signal';
+  });
+  const cb  = document.getElementById('cardBPM');
+  const cs  = document.getElementById('cardSpO2');
+  if (cb) cb.className  = 'card pulse-card';
+  if (cs) cs.className  = 'card pulse-card';
+
+  // Generic
+  const vg = document.getElementById('valGeneric');
+  if (vg) vg.textContent = '—';
+  const cg = document.getElementById('cardGeneric');
+  if (cg) cg.className = 'card';
+
+  document.getElementById('lastUpdate').textContent = 'No recent data';
 }
 
 /* ── BUILD UI ────────────────────────────────────── */
