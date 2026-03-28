@@ -229,7 +229,7 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 
 <script>
 const MAX_HISTORY   = 20;
-const STALE_MS      = 30000;   // treat reading as stale after 30 seconds
+const STALE_MS      = 5000;   // treat reading as stale after 30 seconds
 let activeSensorType = null;
 let lastReadingTime  = null;   // timestamp of last live reading
 let staleTimer       = null;   // interval that watches for stale data
