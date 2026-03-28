@@ -181,10 +181,10 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 
   <!-- Shown only when Firebase URL secret was not injected -->
   <div id="configError">
-    <strong>⚠ Firebase URL not configured</strong>
-    Add a repository secret named <code>FIREBASE_DATABASE_URL</code> in
-    GitHub → Settings → Secrets and variables → Actions,
-    then re-run the deployment workflow.
+    <strong>⚠ Firebase config not found</strong>
+    Copy <code>config.example.js</code> → <code>config.js</code> in the same folder,
+    then fill in your Firebase URL. <code>config.js</code> is in <code>.gitignore</code>
+    and will never be committed to your repo.
   </div>
 
   <div id="noSensorState">
@@ -220,17 +220,12 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-<!--
-  FIREBASE_DATABASE_URL below is a placeholder.
-  The GitHub Actions workflow replaces it with the real URL
-  from the repository secret FIREBASE_DATABASE_URL at deploy time.
-  The actual URL is never stored in this file in the repo.
+<!-- 
+  config.js lives next to this file.
+  It is listed in .gitignore and never committed to the repo.
+  Copy config.example.js → config.js and fill in your Firebase URL.
 -->
-<script>
-const FIREBASE_CONFIG = {
-  databaseURL: "https://YOUR-PROJECT-default-rtdb.firebaseio.com"
-};
-</script>
+<script src="config.js" onerror="handleConfigMissing()"></script>
 
 <script>
 const MAX_HISTORY   = 20;
@@ -241,15 +236,21 @@ let staleTimer       = null;   // interval that watches for stale data
 const historyLog     = [];
 
 /* ── CONFIG GUARDS ───────────────────────────────── */
+function handleConfigMissing() {
+  showConfigError();
+}
+
 function showConfigError() {
   document.getElementById('configError').style.display = 'block';
   document.getElementById('noSensorState').style.display = 'none';
-  setPill('error', 'No URL');
+  setPill('error', 'Config Error');
 }
 
 /* ── BOOT ────────────────────────────────────────── */
 window.addEventListener('DOMContentLoaded', () => {
-  if (!FIREBASE_CONFIG.databaseURL ||
+  // FIREBASE_CONFIG is defined by config.js (gitignored)
+  if (typeof FIREBASE_CONFIG === 'undefined' ||
+      !FIREBASE_CONFIG.databaseURL ||
       FIREBASE_CONFIG.databaseURL.includes('YOUR-PROJECT')) {
     showConfigError();
     return;
