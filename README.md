@@ -30,8 +30,5 @@ Designed for real-time visualization with minimal configuration.
 Active development — documentation is limited by design.
 
 ## License
-
 MIT
-
-```
 ```
